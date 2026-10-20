@@ -43,7 +43,10 @@ async function beginGoogleOAuth(action, role) {
 
   try {
     const switched = await window.nijiAuth.prepareAccountSwitch('Google');
-    if (!switched) return;
+    if (!switched) {
+      window.resetAuthButton?.(document.getElementById('google-btn'));
+      return;
+    }
     window.nijiAuth.clearPendingSignup();
     sessionStorage.setItem(OAUTH_PENDING_KEY, JSON.stringify({ action, role }));
     await account.createOAuth2Token({
@@ -54,16 +57,20 @@ async function beginGoogleOAuth(action, role) {
     });
   } catch (error) {
     sessionStorage.removeItem(OAUTH_PENDING_KEY);
+    window.resetAuthButton?.(document.getElementById('google-btn'));
     console.error('Appwrite Google OAuth could not be started:', error);
     showOAuthError(`Could not start Google sign-in: ${error.message || error}`);
   }
 }
 
 window.startGoogleOAuth = (action) => {
+  const button = document.getElementById('google-btn');
+  if (button?.disabled) return;
   const flow = action || (document.getElementById('auth-form')?.dataset.mode === 'signup' ? 'signup' : 'login');
   const role = document.getElementById('role-professor')?.getAttribute('aria-pressed') === 'true'
     ? 'professor'
     : 'student';
+  window.setAuthButtonLoading?.(button, flow === 'signup' ? 'Creating account...' : 'Logging in...');
   void beginGoogleOAuth(flow, role);
 }
 

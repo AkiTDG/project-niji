@@ -80,6 +80,32 @@ function showFormError(id, message) {
   el.classList.toggle('hidden', !message);
 }
 
+const buttonContents = new WeakMap();
+
+function setButtonLoading(button, message, allowDisabled = false) {
+  if (!button || buttonContents.has(button) || (button.disabled && !allowDisabled)) return false;
+  buttonContents.set(button, button.innerHTML);
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  button.replaceChildren();
+  const spinner = document.createElement('span');
+  spinner.className = 'inline-block size-4 rounded-full border-2 border-current border-r-transparent animate-spin';
+  spinner.setAttribute('aria-hidden', 'true');
+  button.append(spinner, document.createTextNode(` ${message}`));
+  return true;
+}
+
+function resetButton(button) {
+  if (!buttonContents.has(button)) return;
+  button.innerHTML = buttonContents.get(button);
+  button.disabled = false;
+  button.removeAttribute('aria-busy');
+  buttonContents.delete(button);
+}
+
+window.setAuthButtonLoading = setButtonLoading;
+window.resetAuthButton = resetButton;
+
 // --- Flowchart routing: after log-in / sign-up, finish the profile step first if needed ---
 const onboardingPage = (role) => role === 'professor' ? 'professor-onboarding.html' : 'onboarding.html';
 function authDestination(user) {
@@ -105,6 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Log-in / sign-up pages
   const form = document.getElementById('auth-form');
+  const authButton = form?.querySelector('button[type="submit"]');
   const passwordInput = document.getElementById('password-input');
   const confirmInput = document.getElementById('confirm-password-input');
   const isSignup = form?.dataset.mode === 'signup';
@@ -124,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (authButton?.disabled) return;
       if (!isSignup) sessionStorage.removeItem(PENDING_SIGNUP_KEY);
       showFormError('form-error', '');
       const email = document.getElementById('email-input').value.trim();
@@ -140,8 +168,10 @@ document.addEventListener('DOMContentLoaded', () => {
             confirmInput.setCustomValidity('Passwords do not match.');
             return confirmInput.reportValidity();
           }
+          setButtonLoading(authButton, 'Creating account...');
           const switched = await nijiAuth.prepareAccountSwitch('sign-up');
           if (!switched) {
+            resetButton(authButton);
             return showFormError('form-error', 'Sign-up cancelled. Your current session was kept.');
           }
           sessionStorage.setItem(PENDING_SIGNUP_KEY, JSON.stringify({
@@ -152,15 +182,35 @@ document.addEventListener('DOMContentLoaded', () => {
           location.replace(onboardingPage(currentRole));
           return;
         } else {
+          setButtonLoading(authButton, 'Logging in...');
           result = await loginUser({ email, password: passwordInput.value, role: currentRole, provider: 'password' });
         }
       } catch (error) {
+        resetButton(authButton);
         console.error('Authentication request failed:', error);
         return showFormError('form-error', error.message || 'Authentication failed. Please try again.');
       }
 
-      if (result.error) return showFormError('form-error', result.error);
+      if (result.error) {
+        resetButton(authButton);
+        return showFormError('form-error', result.error);
+      }
       goAfterAuth(result.user);
+    });
+  }
+
+  const onboardingForm = document.getElementById('onboarding-form');
+  const onboardingButton = onboardingForm?.querySelector('button[type="submit"]');
+  if (onboardingForm && onboardingButton) {
+    const buttonObserver = new MutationObserver(() => {
+      if (!onboardingButton.disabled && onboardingButton.getAttribute('aria-busy') === 'true') {
+        resetButton(onboardingButton);
+      }
+    });
+    buttonObserver.observe(onboardingButton, { attributes: true, attributeFilter: ['disabled'] });
+    onboardingForm.addEventListener('submit', () => {
+      const isCreatingAccount = Boolean(sessionStorage.getItem(PENDING_SIGNUP_KEY));
+      setButtonLoading(onboardingButton, isCreatingAccount ? 'Creating account...' : 'Saving profile...', true);
     });
   }
 
