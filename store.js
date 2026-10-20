@@ -201,6 +201,42 @@ async function trustedWrite(action, data) {
   return response;
 }
 
+async function checkAccountExists(email) {
+  let execution;
+  try {
+    execution = await window.nijiAppwrite.functions.createExecution({
+      functionId: dataFunctionId(),
+      body: JSON.stringify({ action: 'account-exists', data: { email } }),
+      async: false,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    throw new Error(`Could not check whether the account exists: ${appwriteError(error)}`);
+  }
+
+  let response;
+  try {
+    response = execution.responseBody ? JSON.parse(execution.responseBody) : {};
+  } catch (error) {
+    console.error('The Appwrite account check returned a non-JSON response:', error);
+    throw new Error('The account check returned an invalid response.');
+  }
+  if (execution.status !== 'completed' || execution.responseStatusCode < 200 || execution.responseStatusCode >= 300) {
+    console.error('The Appwrite account check failed:', {
+      executionId: execution.$id || execution.id,
+      status: execution.status,
+      responseStatusCode: execution.responseStatusCode,
+      errors: execution.errors,
+    });
+    throw new Error('Could not check whether the account exists. Please try again.');
+  }
+  if (typeof response.exists !== 'boolean') {
+    throw new Error('The account check returned an invalid response.');
+  }
+  return response.exists;
+}
+
 function legacyDb() {
   try {
     const legacy = JSON.parse(localStorage.getItem(DB_KEY));
@@ -672,8 +708,7 @@ async function updateCurrentUser(fn) {
   const updated = structuredClone(current);
   fn(updated);
   updated.expectedStatusUpdatedAt = current.status?.updatedAt || null;
-  await saveCurrentUserData(updated);
-  return updated;
+  return await saveCurrentUserData(updated);
 }
 
 function updateLocalUserData(fn) {

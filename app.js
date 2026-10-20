@@ -188,22 +188,20 @@ document.addEventListener('DOMContentLoaded', () => {
       button.textContent = 'Sending...';
       showFormError('forgot-error', '');
       try {
-        const recoveryUrl = new URL(location.pathname, location.origin);
+        if (!await checkAccountExists(email)) {
+          showFormError('forgot-error', 'No account exists for this email address.');
+          button.textContent = defaultButtonText;
+          button.disabled = false;
+          return;
+        }
         await nijiAccount().createRecovery({
           email,
-          url: recoveryUrl.toString(),
+          url: nijiAppwrite.config.recoveryUrl,
         });
         document.getElementById('forgot-form-wrap').classList.add('hidden');
         document.getElementById('forgot-success').classList.remove('hidden');
       } catch (requestError) {
-        const errorType = String(requestError?.type || '').toLowerCase();
-        const isUnknownUser = errorType === 'user_not_found'
-          || (requestError?.code === 404 && /user.*not found|not found.*user/i.test(String(requestError.message || '')));
-        if (isUnknownUser) {
-          document.getElementById('forgot-form-wrap').classList.add('hidden');
-          document.getElementById('forgot-success').classList.remove('hidden');
-          return;
-        }
+        console.error('Password recovery request failed:', requestError);
         showFormError('forgot-error', 'We could not process that request right now. Check your connection and try again.');
         button.textContent = defaultButtonText;
         button.disabled = false;

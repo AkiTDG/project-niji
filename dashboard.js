@@ -85,7 +85,6 @@ if (!window.clockInterval) window.clockInterval = window.setInterval(updateDashb
     if (error?.code === 401) return redirectTo('index.html');
     window.nijiDirectoryError = error.message || String(error);
   }
-
   const $ = (s) => document.querySelector(s);
   const state = { query: '', filter: 'all', college: '', sort: 'asc', showArchived: false };
   $('#sidebar-toggle').addEventListener('click', (event) => {
@@ -483,7 +482,8 @@ if (!window.clockInterval) window.clockInterval = window.setInterval(updateDashb
         u.status = { ...u.status, state: STATUSES[d.state] ? d.state : 'away' };
         u.statusMessage = String(d.statusMessage || '').trim();
       });
-      f.closest('[data-modal]').close(); toast('Status and message updated'); render();
+      f.closest('[data-modal]').close();
+      toast('Status and message updated'); render();
     },
     'delete-account': async (f) => {
       const btn = f.querySelector('button:not([type])'); btn.disabled = true;
